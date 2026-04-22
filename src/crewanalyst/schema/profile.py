@@ -8,7 +8,7 @@ class ColumnProfile(BaseModel):
     dtype: str = Field(description="Data type of the column (e.g., int, float, object)")
     missing_values: int = Field(description="Number of missing values in the column")
     missing_values_percentage: float = Field(description="Percentage of missing values in the column")
-    semantic_role: Literal["identifier", "categorical", "numerical", "datetime", "text"] = Field(description="Semantic role of the column")
+    semantic_role: Literal["identifier", "target_metric", "categorical", "numerical", "datetime", "text"] = Field(description="Semantic role of the column")
     is_target_metric: bool = Field(description="True if this column is likely a target metric for modeling")
     
     
