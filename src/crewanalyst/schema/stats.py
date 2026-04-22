@@ -12,7 +12,7 @@ class NumericColumnStats(BaseModel):
     kurtosis: float = Field(description="Kurtosis of the column")
     p25: float = Field(description="25th percentile of the column")
     p75: float = Field(description="75th percentile of the column")
-    is_target_metric: bool = Field(description="True if the column is classified as a target metric")
+    
     
     
 class CategoricalColumnStats(BaseModel):
