@@ -1,7 +1,7 @@
 from crewai import Agent, LLM
 
 
-from crewanalyst.tools.tool_base64 import base64_to_csv_tool
+from crewanalyst.tools.tool_pandas import base64_to_csv
 
 llm_model = LLM("openai/gpt-5-nano-2025-08-07")
 
@@ -19,7 +19,7 @@ reporter_agent = Agent(
         "Your reports are always clear, concise, and focused on the most important takeaways for the audience."
     ),
     llm=llm_model,
-    tools=[base64_to_csv_tool],
+    tools=[base64_to_csv],
     allow_delegation=False,
     verbose=True,
 )

@@ -51,3 +51,5 @@ def build_tasks(csv_path: str, user_context: str = ""):
         output_pydantic=DataProfile,
         agent=profiler_agent,
     )
+    
+    return [profile_task]

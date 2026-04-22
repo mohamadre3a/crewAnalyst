@@ -7,7 +7,29 @@ from crewai.tools import BaseTool, tool
 
 from crewanalyst.schema.stats import NumericColumnStats
 
+@tool("base64_to_csv")
+def base64_to_csv(base64_string: str, filename: str = "uploaded.csv") -> str:
+    """
+    Decodes a base64-encoded CSV string, saves it as a temporary CSV file,
+    and returns the file path. Use this when the CSV is provided as a base64
+    string rather than a direct file path.
+    """
+    try:
+        import base64
+        import tempfile
+        import os
 
+        decoded = base64.b64decode(base64_string)
+        tmp_dir = tempfile.gettempdir()
+        file_path = os.path.join(tmp_dir, filename)
+
+        with open(file_path, "wb") as f:
+            f.write(decoded)
+
+        return file_path
+    except Exception as e:
+        return f"ERROR: base64_to_csv failed — {e}"
+    
 @tool("inspect_csv")
 def inspect_csv(csv_path: str) -> str:
     """
