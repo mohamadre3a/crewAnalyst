@@ -73,13 +73,14 @@ def get_pearson_correlation_matrix(csv_path: str) -> str:
     
     
 class DescriptiveStatsInput(BaseModel):
+    
     csv_path: str = Field(description="Absolute path to the CSV file")
     columns: list[str] = Field(description="List of numeric column names to compute stats for")
 
 
 class DescriptiveStatsTool(BaseTool):
-    name = "get_descriptive_stats"
-    description = "Computes descriptive statistics (mean, median, std, min, max) for specified numeric columns in a CSV file."
+    name: str =  "get_descriptive_stats"
+    description: str = "Computes descriptive statistics (mean, median, std, min, max) for specified numeric columns in a CSV file."
     
     args_schema: Type[BaseModel] = DescriptiveStatsInput
 
