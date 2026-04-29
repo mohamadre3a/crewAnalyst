@@ -137,36 +137,61 @@ def build_tasks(csv_path: str, user_context: str = ""):
         async_execution=True,          
     )
     
-    viz_task = Task(
+    
+    viz_generate_task = Task(
         description=(
             f"Generate charts for the dataset at: {csv_path}. "
             "You have the outputs from the statistician, anomaly detector, and correlation analyst. "
-            "Your job is NOT to generate a fixed set of charts — generate only charts that "
-            "illustrate a specific finding from the analysis. "
-            "Guidelines: "
-            "- For skewed numerical columns flagged by the statistician: generate a histogram. "
-            "- For group comparisons with meaningful differences: generate a boxplot. "
-            "- For strong correlations (|r| > 0.5): generate a scatter plot. "
-            "- If multiple numeric columns exist: generate a correlation heatmap. "
-            "- For datetime data: generate a time series chart. "
-            "- For high-severity anomalies: generate an anomaly highlight chart. "
-            "- For dominant categories: generate a bar chart. "
-            "Do not generate more than 10 charts total. "
-            "For each chart, record what finding it illustrates in finding_it_illustrates. "
-            "For each chart file_path, use the exact path string returned by the chart generation tool. "
-            "Do not invent chart paths; chart tools save files under outputs/charts. "
-            "Record any finding you considered but decided not to chart in skipped_visualizations."
+            "Your ONLY job here is to call chart-generation tools for findings that warrant a visualization. "
+            "You MUST actually call the tools — producing zero tool calls is invalid output.\n\n"
+            "Guidelines for which tool to call:\n"
+            "- For skewed numerical columns flagged by the statistician: call generate_histogram.\n"
+            "- For group comparisons with meaningful differences: call generate_boxplot.\n"
+            "- For strong correlations (|r| > 0.5): call generate_scatter_plot.\n"
+            "- If 2+ numeric columns exist: call generate_correlation_heatmap.\n"
+            "- For datetime data: call generate_time_series_chart.\n"
+            "- For high-severity anomalies: call generate_anomaly_highlight_chart.\n"
+            "- For dominant categorical values: call generate_bar_chart.\n"
+            "Generate at most 10 charts total.\n\n"
+            "After all tool calls, your final answer must be ONLY a newline-separated list "
+            "of the file paths the tools returned — one path per line, nothing else. "
+            "No JSON, no commentary, no markdown."
         ),
         expected_output=(
-            "A VizManifest containing a list of Chart objects each with: title, caption, "
-            "chart_type, finding_source, finding_it_illustrates, columns_used, and file_path. "
-            "Also include skipped_visualizations explaining what was considered but not charted."
+            "A newline-separated list of file paths returned by the chart tools. "
+            "Each line is one file path string. Nothing else."
+        ),
+        agent=visualizer_agent,
+        context=[profile_task, stats_task, anomaly_task, correlation_task],
+        async_execution=False,
+    )
+
+    viz_manifest_task = Task(
+        description=(
+            "Using the file paths from the previous step (one per line) and the analysis context, "
+            "assemble the VizManifest. Do not call any tools.\n\n"
+            "For each file path from the previous step, create one Chart object with:\n"
+            "- file_path: the EXACT path string from the previous step, character-for-character\n"
+            "- chart_type: inferred from filename/context (histogram, boxplot, scatter, line, bar, heatmap, correlation_heatmap)\n"
+            "- title: short descriptive title (e.g., 'Distribution of Revenue')\n"
+            "- caption: one sentence on what the chart shows and why it matters\n"
+            "- finding_source: 'statistics', 'anomalies', or 'correlations'\n"
+            "- finding_it_illustrates: plain-English description of the specific finding\n"
+            "- columns_used: column names appearing in the chart\n\n"
+            "Only use file paths that appear verbatim in the previous step's output. "
+            "Do not invent paths. If you considered a finding but no path exists for it, "
+            "list it in skipped_visualizations with a brief reason."
+        ),
+        expected_output=(
+            "A complete VizManifest with one Chart per file path from the previous step, "
+            "total_charts set correctly, and skipped_visualizations populated for any "
+            "findings not visualized."
         ),
         output_pydantic=VizManifest,
         agent=visualizer_agent,
-        context=[profile_task, stats_task, anomaly_task, correlation_task],
-        async_execution=False,        
-    )
+        context=[viz_generate_task, profile_task, stats_task, anomaly_task, correlation_task],
+        async_execution=False,
+)
     
     synthesis_task = Task(
         description=(
@@ -190,7 +215,7 @@ def build_tasks(csv_path: str, user_context: str = ""):
         ),
         output_pydantic=ExecutiveSynthesis,
         agent=synthesizer_agent,
-        context=[profile_task, stats_task, anomaly_task, correlation_task, viz_task],
+        context=[profile_task, stats_task, anomaly_task, correlation_task, viz_manifest_task],
         async_execution=False,
     )
     report_task = Task(
@@ -238,7 +263,7 @@ def build_tasks(csv_path: str, user_context: str = ""):
         stats_task,
         anomaly_task,
         correlation_task,
-        viz_task,
+        viz_manifest_task,
         synthesis_task,
     ],
     async_execution=False,
@@ -246,4 +271,4 @@ def build_tasks(csv_path: str, user_context: str = ""):
 )
     
     
-    return [profile_task, stats_task, anomaly_task, correlation_task, viz_task, synthesis_task, report_task]
+    return [profile_task, stats_task, anomaly_task, correlation_task, viz_generate_task, viz_manifest_task, synthesis_task, report_task]

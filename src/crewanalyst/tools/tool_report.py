@@ -96,5 +96,5 @@ class ConvertMarkdownToPdfTool(BaseTool):
             return f"ERROR: convert_markdown_to_pdf failed: {e}"
 
 
-write_markdown_report_tool = WriteMarkdownReportTool()
+
 convert_markdown_to_pdf_tool = ConvertMarkdownToPdfTool()

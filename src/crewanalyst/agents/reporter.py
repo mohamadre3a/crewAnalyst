@@ -1,12 +1,11 @@
 from crewai import Agent, LLM
 
 
-from crewanalyst.tools.tool_report import  write_markdown_report_tool
+from crewanalyst.tools.tool_report import  convert_markdown_to_pdf_tool
 
 
 
-llm_model = LLM("anthropic/claude-haiku-4-5-20251001")
-
+llm_model = LLM("anthropic/claude-sonnet-4-6")
 
 reporter_agent = Agent(
     role="Data Reporter",
@@ -23,7 +22,7 @@ reporter_agent = Agent(
         "when converted to PDF."
     ),
     llm=llm_model,
-    tools=[write_markdown_report_tool],
+    tools=[convert_markdown_to_pdf_tool],
     allow_delegation=False,
     verbose=True,
 )
