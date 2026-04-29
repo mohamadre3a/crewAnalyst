@@ -1,7 +1,7 @@
 from crewai import Agent, LLM
 from crewanalyst.tools.tool_viz import histogram_tool, boxplot_tool, time_series_tool, correlation_heatmap_tool, bar_chart_tool, scatter_plot_tool, anomaly_highlight_tool
 
-llm_model = LLM("openai/gpt-5.2-mini")
+llm_model = LLM("anthropic/claude-sonnet-4-6")
 visualizer_agent = Agent(
     role="Data Visualizer",
     goal=(

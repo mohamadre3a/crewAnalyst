@@ -322,11 +322,34 @@ def convert_charts_to_base64(file_paths_json: str) -> str:
     Pass a JSON array string like: '["outputs/charts/a.png", "outputs/charts/b.png"]'
     """
     try:
-        paths = json.loads(file_paths_json)
+        if isinstance(file_paths_json, list):
+            paths = file_paths_json
+        else:
+            paths = json.loads(file_paths_json)
+        if not isinstance(paths, list):
+            return "ERROR: file_paths_json must be a JSON array of file paths"
+
         result = {}
+        missing = []
         for path in paths:
-            with open(path, "rb") as f:
-                result[path] = base64.b64encode(f.read()).decode("utf-8")
+            original_path = str(path)
+            chart_path = Path(original_path)
+
+            if not chart_path.exists():
+                fallback_path = CHARTS_DIR / chart_path.name
+                if fallback_path.exists():
+                    chart_path = fallback_path
+
+            if not chart_path.exists():
+                missing.append(original_path)
+                continue
+
+            with open(chart_path, "rb") as f:
+                result[original_path] = base64.b64encode(f.read()).decode("utf-8")
+
+        if missing:
+            result["__missing_files__"] = missing
+
         return json.dumps(result)
     except Exception as e:
         return f"ERROR: convert_charts_to_base64 failed — {e}"

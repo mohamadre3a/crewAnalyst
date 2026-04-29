@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CrewAnalyst Report</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fa;
+      --panel: #ffffff;
+      --ink: #19202a;
+      --muted: #5d6878;
+      --line: #d9dee7;
+      --accent: #146a72;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.5;
+    }
+
+    main {
+      max-width: 1080px;
+      margin: 0 auto;
+      padding: 40px 24px 56px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+
+    h1, h2, h3 {
+      line-height: 1.15;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 34px;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin-bottom: 14px;
+    }
+
+    h3 {
+      font-size: 17px;
+      margin-bottom: 8px;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      margin-top: 18px;
+      padding: 22px;
+    }
+
+    p {
+      margin: 0 0 12px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    li + li {
+      margin-top: 7px;
+    }
+
+    .meta {
+      color: var(--muted);
+      margin: 0;
+    }
+
+    .stats-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      background: #fbfcfd;
+    }
+
+    .metric strong {
+      display: block;
+      color: var(--accent);
+      font-size: 24px;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .finding {
+      border-left: 4px solid var(--accent);
+      padding-left: 12px;
+    }
+
+    .chart {
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+
+    .chart img {
+      display: block;
+      max-width: 100%;
+      height: auto;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #ffffff;
+    }
+
+    .caption {
+      color: var(--muted);
+      font-size: 14px;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>CrewAnalyst Report</h1>
+      <p class="meta">
+        {{ report.profile.inferred_domain | default("Dataset analysis", true) }}
+      </p>
+    </header>
+
+    <section>
+      <h2>Dataset Overview</h2>
+      <div class="stats-grid">
+        <div class="metric">
+          <strong>{{ report.profile.row_count | default("N/A", true) }}</strong>
+          <span>Rows</span>
+        </div>
+        <div class="metric">
+          <strong>{{ report.profile.column_count | default("N/A", true) }}</strong>
+          <span>Columns</span>
+        </div>
+        <div class="metric">
+          <strong>{{ "Yes" if report.profile.has_target_metric else "No" }}</strong>
+          <span>Target metric detected</span>
+        </div>
+      </div>
+      {% if report.profile.quality_flags %}
+      <h3 style="margin-top: 18px;">Quality Flags</h3>
+      <ul>
+        {% for flag in report.profile.quality_flags %}
+        <li>{{ flag }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+
+    <section>
+      <h2>Executive Summary</h2>
+      <p>{{ report.synthesis.executive_summary | default("No executive summary was provided.", true) }}</p>
+      {% if report.synthesis.quality_caveat %}
+      <p><strong>Quality caveat:</strong> {{ report.synthesis.quality_caveat }}</p>
+      {% endif %}
+    </section>
+
+    {% if report.synthesis.key_findings %}
+    <section>
+      <h2>Key Findings</h2>
+      <ul>
+        {% for item in report.synthesis.key_findings %}
+        <li class="finding">
+          <strong>{{ item.rank | default(loop.index, true) }}. {{ item.finding }}</strong>
+          <br>
+          <span class="meta">{{ item.source | default("analysis", true) }}{% if item.actionable is defined %} · {{ "Actionable" if item.actionable else "Informational" }}{% endif %}</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+
+    {% if report.visualizations.charts %}
+    <section>
+      <h2>Charts</h2>
+      {% for chart in report.visualizations.charts %}
+      <article class="chart">
+        <h3>{{ chart.title }}</h3>
+        {% if chart.base64_data %}
+        <img src="data:image/png;base64,{{ chart.base64_data }}" alt="{{ chart.title }}">
+        {% endif %}
+        <p class="caption">{{ chart.caption }}</p>
+        {% if chart.finding_it_illustrates %}
+        <p>{{ chart.finding_it_illustrates }}</p>
+        {% endif %}
+      </article>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if report.anomalies.summary or report.correlations.summary %}
+    <section>
+      <h2>Analysis Notes</h2>
+      {% if report.anomalies.summary %}
+      <h3>Anomalies</h3>
+      <p>{{ report.anomalies.summary }}</p>
+      {% endif %}
+      {% if report.correlations.summary %}
+      <h3>Correlations</h3>
+      <p>{{ report.correlations.summary }}</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if report.synthesis.recommended_next_steps %}
+    <section>
+      <h2>Recommended Next Steps</h2>
+      <ul>
+        {% for step in report.synthesis.recommended_next_steps %}
+        <li>{{ step }}</li>
+        {% endfor %}
+      </ul>
+    </section>
+    {% endif %}
+  </main>
+</body>
+</html>

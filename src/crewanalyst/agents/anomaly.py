@@ -1,7 +1,10 @@
 from crewai import Agent, LLM
 from crewanalyst.tools.tools_stats import iqr_outlier_tool, zscore_outlier_tool, rare_category_tool
 
-llm = LLM(model="openai/gpt-5-nano-2025-08-07")
+llm = LLM(
+    model="anthropic/claude-haiku-4-5-20251001",
+    max_tokens=8000,
+)
 
 anomaly_agent = Agent(
     role="Anomaly Detection Specialist",

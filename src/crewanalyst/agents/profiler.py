@@ -3,7 +3,7 @@
 from crewai import Agent, LLM
 from crewanalyst.tools.tool_pandas import get_null_report, inspect_csv
 
-llm_model = LLM("openai/gpt-5-nano-2025-08-07")
+llm_model = LLM("anthropic/claude-haiku-4-5-20251001")
 
 profiler_agent = Agent(
     role="Expert Data Profiler",

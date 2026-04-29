@@ -22,13 +22,19 @@ class CategoricalColumnStats(BaseModel):
     top_freq: int = Field(description="Frequency of the most frequent value")
     unique_value_counts: dict = Field(description="Dictionary mapping unique values to their counts")
     is_identifier: bool = Field(description="True if the column is classified as an identifier")
-
-class GroupComparison(BaseModel):
-    """Comparison of a numeric column across groups defined by a categorical column."""
+    
+class GroupStats(BaseModel):
     group_name: str = Field(description="Name of the group (e.g., 'Male', 'Female')")
     group_size: int = Field(description="Number of rows in the group")
     group_mean: float = Field(description="Mean of the numeric column for the group")
     is_identifier: bool = Field(description="True if the categorical column is classified as an identifier")
+
+class GroupComparison(BaseModel):
+    """Comparison of a numeric column across groups defined by a categorical column."""
+    numeric_column: str = Field(description="Name of the numeric column being compared")
+    categorical_column: str = Field(description="Name of the categorical column defining the groups")
+    groups: list[GroupStats] = Field(description="List of statistics for each group")
+
     
 class TimeTrend(BaseModel):
     """Trend analysis for a numeric column over time."""
@@ -47,6 +53,6 @@ class StatsProfile(BaseModel):
     """Comprehensive statistics profile for a dataset."""
     numeric_stats: dict[str, NumericColumnStats] = Field(description="Dictionary mapping numeric column names to their statistics")
     categorical_stats: dict[str, CategoricalColumnStats] = Field(description="Dictionary mapping categorical column names to their statistics")
-    group_comparisons: dict[tuple[str, str], GroupComparison] = Field(description="Dictionary mapping (numeric_column, categorical_column) pairs to their group comparisons")
+    group_comparisons: list[GroupComparison] = []
     time_trends: dict[str, TimeTrend] = Field(description="Dictionary mapping numeric column names to their time trend analyses")
     key_findings: list[str] = Field(description="List of plain English key findings from the statistical analysis, e.g. 'The average revenue is higher for customers in the 'Gold' segment compared to the 'Silver' segment.'")

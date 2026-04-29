@@ -52,4 +52,198 @@ def build_tasks(csv_path: str, user_context: str = ""):
         agent=profiler_agent,
     )
     
-    return [profile_task]
+    stats_task = Task(
+        description=(
+            f"Analyze the dataset at: {csv_path}. "
+            "You have already been given the DataProfile from the profiler. "
+            "Step 1: for every column with semantic_role 'numerical' or 'target_metric', "
+            "call descriptive_stats_tool to get mean, median, std, skewness, kurtosis, min, max, p25, p75. "
+            "Step 2: for every column with semantic_role 'categorical' or 'identifier', "
+            "call compute_categorical_stats to get mode, unique count, entropy, top values. "
+            "Step 3: if has_datetime_index is True in the profile, call analyze_datetime_column "
+            "for each numerical column paired with the datetime column. "
+            "Step 4: if grouping variables (categorical columns) exist alongside numerical columns, "
+            "call compute_group_aggregates for the most meaningful numeric-categorical pairs. "
+            "Step 5: write 3-5 key_findings as plain English observations about what stands out."
+        ),
+        expected_output=(
+            "A StatsProfile containing: numeric_summaries for all numerical columns, "
+            "categorical_summaries for all categorical columns, "
+            "group_comparisons if grouping variables exist (empty list if not), "
+            "time_trends if a datetime column exists (empty list if not), "
+            "and 3-5 key_findings as plain English observations."
+        ),
+        output_pydantic=StatsProfile,
+        agent=statistician_agent,
+        context=[profile_task],         
+        async_execution=True,          
+    )
+    
+    anomaly_task = Task(
+        description=(
+            f"Detect anomalies in the dataset at: {csv_path}. "
+            "You have already been given the DataProfile from the profiler. "
+            "Step 1: for every column with semantic_role 'numerical' or 'target_metric', "
+            "call detect_outliers_iqr and detect_outliers_zscore. "
+            "If both methods flag the same row, mark detection_method as 'both' — "
+            "this indicates a stronger anomaly. "
+            "Step 2: for every column with semantic_role 'categorical', "
+            "call detect_rare_categories to find suspicious rare values. "
+            "Step 3: for each anomaly found, decide: is this a data quality issue "
+            "(entry error, pipeline bug) or a real signal (genuine outlier)? "
+            "Use the inferred_domain from the profile to inform your interpretation. "
+            "Step 4: assign severity — high if the value is extreme and impactful, "
+            "medium if worth investigating, low if minor. "
+            "Step 5: return at most 20 detailed anomalies total, sorted by severity descending. "
+            "Prefer high and medium severity items. If more than 20 anomalies are found, "
+            "summarize the remainder in summary and set omitted_anomaly_count. "
+            "Step 6: keep each anomaly interpretation to one concise sentence under 25 words. "
+            "Step 7: write a one-paragraph summary of the overall anomaly landscape."
+        ),
+        expected_output=(
+            "An AnomalyReport containing: at most 20 Anomaly objects sorted by severity descending, "
+            "total_found count, high/medium/low severity counts, "
+            "omitted_anomaly_count for any detected anomalies not listed in detail, "
+            "columns_with_no_anomalies list, and a one-paragraph summary."
+        ),
+        output_pydantic=AnomalyReport,
+        agent=anomaly_agent,
+        context=[profile_task],        
+        async_execution=True,           
+    )
+    
+    correlation_task = Task(
+        description=(
+            f"Find relationships between variables in the dataset at: {csv_path}. "
+            "You have already been given the DataProfile from the profiler. "
+            "Step 1: call get_pearson_correlation_matrix for all numerical columns. "
+            "For each pair with |r| > 0.3, create a Correlation object. "
+            "Mark is_redundant=True if |r| > 0.95. "
+            "Step 2: for categorical column pairs, call compute_cramers_v. "
+            "Step 3: if a target_metric column exists, focus your analysis on which "
+            "columns correlate most strongly with it — these go in target_metric_correlations. "
+            "Step 4: write a one-paragraph summary of the most important relationships found. "
+            "Do not compute correlations involving identifier columns."
+        ),
+        expected_output=(
+            "A CorrelationReport containing: top_correlations sorted by absolute coefficient descending, "
+            "target_metric_correlations if a target metric exists (empty list if not), "
+            "redundant_pairs for near-perfect correlations, "
+            "total_pairs_tested count, and a one-paragraph summary."
+        ),
+        output_pydantic=CorrelationReport,
+        agent=correlation_agent,
+        context=[profile_task],        
+        async_execution=True,          
+    )
+    
+    viz_task = Task(
+        description=(
+            f"Generate charts for the dataset at: {csv_path}. "
+            "You have the outputs from the statistician, anomaly detector, and correlation analyst. "
+            "Your job is NOT to generate a fixed set of charts — generate only charts that "
+            "illustrate a specific finding from the analysis. "
+            "Guidelines: "
+            "- For skewed numerical columns flagged by the statistician: generate a histogram. "
+            "- For group comparisons with meaningful differences: generate a boxplot. "
+            "- For strong correlations (|r| > 0.5): generate a scatter plot. "
+            "- If multiple numeric columns exist: generate a correlation heatmap. "
+            "- For datetime data: generate a time series chart. "
+            "- For high-severity anomalies: generate an anomaly highlight chart. "
+            "- For dominant categories: generate a bar chart. "
+            "Do not generate more than 10 charts total. "
+            "For each chart, record what finding it illustrates in finding_it_illustrates. "
+            "For each chart file_path, use the exact path string returned by the chart generation tool. "
+            "Do not invent chart paths; chart tools save files under outputs/charts. "
+            "Record any finding you considered but decided not to chart in skipped_visualizations."
+        ),
+        expected_output=(
+            "A VizManifest containing a list of Chart objects each with: title, caption, "
+            "chart_type, finding_source, finding_it_illustrates, columns_used, and file_path. "
+            "Also include skipped_visualizations explaining what was considered but not charted."
+        ),
+        output_pydantic=VizManifest,
+        agent=visualizer_agent,
+        context=[profile_task, stats_task, anomaly_task, correlation_task],
+        async_execution=False,        
+    )
+    
+    synthesis_task = Task(
+        description=(
+            "You have the complete outputs from all analysis agents: "
+            "the DataProfile, StatsSummary, AnomalyReport, CorrelationReport, and VizManifest. "
+            "Step 1: identify the 3-5 most important findings across all analyses. "
+            "Rank them by importance and note which agent produced each finding. "
+            "Mark actionable=True if a business user could take a concrete action based on it. "
+            "Step 2: write a 2-3 paragraph executive_summary for a non-technical stakeholder. "
+            "No jargon. Focus on what the data says and what it means, not how you computed it. "
+            "Step 3: list what the data cannot answer given available columns and quality. "
+            "Step 4: write 3 concrete recommended_next_steps grounded in what was actually found. "
+            "Step 5: assess overall_data_quality_assessment as 'good', 'acceptable', or 'poor'. "
+            "If not 'good', write a quality_caveat explaining the main concerns."
+        ),
+        expected_output=(
+            "An ExecutiveSynthesis containing: key_findings ranked list, "
+            "executive_summary as 2-3 readable paragraphs, "
+            "what_data_cannot_answer list, recommended_next_steps list, "
+            "overall_data_quality_assessment, and quality_caveat if quality is not good."
+        ),
+        output_pydantic=ExecutiveSynthesis,
+        agent=synthesizer_agent,
+        context=[profile_task, stats_task, anomaly_task, correlation_task, viz_task],
+        async_execution=False,
+    )
+    report_task = Task(
+    description=(
+        f"Compose the final markdown report for the dataset at: {csv_path}. "
+        "All analysis outputs are available in your context: DataProfile, StatsProfile, "
+        "AnomalyReport, CorrelationReport, VizManifest, and ExecutiveSynthesis.\n\n"
+
+        "Your ENTIRE response must be the markdown content of the report, and nothing else. "
+        "Do not add any preamble, explanation, or commentary. Do not wrap it in code fences. "
+        "Do not call any tools. Just emit the markdown directly as your final answer.\n\n"
+
+        "Use this structure:\n"
+        "  # Dataset Analysis Report\n"
+        "  ## Executive Summary       (from ExecutiveSynthesis.executive_summary)\n"
+        "  ## Key Findings            (ranked list; flag actionable ones)\n"
+        "  ## Dataset Overview        (rows, columns, inferred_domain, quality_flags)\n"
+        "  ## Statistical Highlights  (interesting items from StatsProfile.key_findings; "
+        "                              use markdown tables for numeric summaries)\n"
+        "  ## Anomalies               (top items + summary paragraph)\n"
+        "  ## Relationships           (top correlations + summary paragraph)\n"
+        "  ## Visualizations          (one subsection per chart, see below)\n"
+        "  ## What This Data Cannot Answer\n"
+        "  ## Recommended Next Steps\n"
+        "  ## Data Quality Assessment (overall + caveat if any)\n\n"
+
+        "For each chart in VizManifest.charts, embed it as:\n"
+        "  ### {chart.title}\n"
+        "  ![{chart.title}](charts/{filename})\n"
+        "  *{chart.caption}*\n"
+        "  > Illustrates: {chart.finding_it_illustrates}\n\n"
+        "  Where {filename} is the basename of chart.file_path. If file_path is "
+        "  'outputs/charts/revenue_dist.png', use 'charts/revenue_dist.png'.\n\n"
+
+        "Style: engaging plain-English prose. Use bullet lists where natural and "
+        "markdown tables where structured numbers help. Do not invent values."
+    ),
+    expected_output=(
+        "The complete markdown report content. The first character must be '#' "
+        "(the top-level heading). Nothing else — no preamble, no fences, no tool calls."
+    ),
+    agent=reporter_agent,
+    context=[
+        profile_task,
+        stats_task,
+        anomaly_task,
+        correlation_task,
+        viz_task,
+        synthesis_task,
+    ],
+    async_execution=False,
+    output_file="outputs/report.md",   
+)
+    
+    
+    return [profile_task, stats_task, anomaly_task, correlation_task, viz_task, synthesis_task, report_task]

@@ -101,7 +101,7 @@ class DescriptiveStatsInput(BaseModel):
 
 
 class DescriptiveStatsTool(BaseTool):
-    name: str =  "get_descriptive_stats"
+    name: str =  "compute_descriptive_stats"
     description: str = "Computes descriptive statistics (mean, median, std, min, max) for specified numeric columns in a CSV file."
     
     args_schema: Type[BaseModel] = DescriptiveStatsInput

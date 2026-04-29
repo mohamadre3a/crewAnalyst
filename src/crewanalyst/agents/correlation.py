@@ -5,7 +5,7 @@ from crewanalyst.tools.tools_stats import cramers_v_tool
 
 
 
-llm = LLM(model="openai/gpt-5-nano-2025-08-07")
+llm = LLM(model="anthropic/claude-haiku-4-5-20251001")
 
 correlation_agent = Agent(
     role="Correlation Analyst",

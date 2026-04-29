@@ -1,25 +1,29 @@
 from crewai import Agent, LLM
 
 
-from crewanalyst.tools.tool_pandas import base64_to_csv
+from crewanalyst.tools.tool_report import  write_markdown_report_tool
 
-llm_model = LLM("openai/gpt-5-nano-2025-08-07")
+
+
+llm_model = LLM("anthropic/claude-haiku-4-5-20251001")
 
 
 reporter_agent = Agent(
     role="Data Reporter",
     goal=(
-        "Produce a clear, concise, and actionable report summarizing the key insights from the dataset. "
-        "Your report should be structured in a way that is easy for business stakeholders to understand and act on. "
-        "Focus on the most important findings, trends, and anomalies that emerged from the analysis, and provide context for why they matter."
-    ),
+        "Compose a clear, concise, and actionable markdown report summarizing the key "
+        "insights from the dataset, then save it to disk and produce a PDF version. "
+        "Write the full report content yourself — no templates. Focus on findings that "
+        "drive decisions, not on rehashing every statistic."
+        ),
     backstory=(
-        "You are a skilled data communicator with a talent for storytelling. You can take complex, technical analysis and distill it down into the few insights that really matter. "
-        "You understand the business context and you know how to communicate findings in a way that drives action. "
-        "Your reports are always clear, concise, and focused on the most important takeaways for the audience."
+        "You are a skilled data communicator with a talent for storytelling. You take "
+        "complex technical analysis and distill it down to the few insights that matter. "
+        "You write clean markdown that reads well in any editor and renders beautifully "
+        "when converted to PDF."
     ),
     llm=llm_model,
-    tools=[base64_to_csv],
+    tools=[write_markdown_report_tool],
     allow_delegation=False,
     verbose=True,
 )

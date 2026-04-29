@@ -15,14 +15,15 @@ class Anomaly(BaseModel):
         description="True if this looks like a data entry error or pipeline bug, False if it looks like a real signal"
     )
     interpretation: str = Field(
-        description="Plain English explanation of why this was flagged and what it might mean in the context of the dataset domain"
+        description="One concise sentence explaining why this was flagged and what it might mean in the dataset domain"
     )
     
     
     
 class AnomalyReport(BaseModel):
-    anomalies: list[Anomaly] = Field(default_factory=list, description="All detected anomalies, sorted by severity descending")
+    anomalies: list[Anomaly] = Field(default_factory=list, description="Up to 20 representative anomalies, sorted by severity descending")
     total_found: int = Field(description="Total count of anomalies detected")
+    omitted_anomaly_count: int = Field(default=0, description="Number of detected anomalies omitted from the detailed anomalies list")
     high_severity_count: int = Field(description="Number of high severity anomalies")
     medium_severity_count: int = Field(description="Number of medium severity anomalies")
     low_severity_count: int = Field(description="Number of low severity anomalies")
