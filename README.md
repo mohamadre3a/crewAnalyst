@@ -1,11 +1,3 @@
-I used the following prompt to generate the README.md content:
-
-```text
-Write a README.md for a project called CrewAnalyst. CrewAnalyst is a data analysis assistant built using CrewAI. It takes CSV files as input and produces structured data profiles, statistical analyses, anomaly detection, correlation insights, charts, and a synthesized HTML report. The README should explain the project's purpose, features, current status, project layout, setup instructions, how to run the profiler UI and test harness, expected outputs, and any relevant development notes. The tone should be clear and informative, targeting data analysts and developers interested in AI-powered data analysis tools.
-```
-
-This project is designed by me, and is developed by me and help of Codex and Claude Code.
-
 # CrewAnalyst
 
 ## How It Works
@@ -59,11 +51,10 @@ Computes descriptive statistics, group comparisons, time trends, and surfaces 3�
 
 | Tool | What it does |
 |---|---|
-| `detect_outliers_iqr` | Flags values outside Q1 − 1.5×IQR / Q3 + 1.5×IQR for a numeric column. |
-| `detect_outliers_zscore` | Flags values whose absolute Z-score exceeds a threshold (default 3.0). |
-| `detect_rare_categories` | Flags categorical values appearing in fewer than 1% of rows. |
-| `run_ttest` | Independent-samples t-test between two groups; returns t-stat, p-value, and significance at p < 0.05. |
-| `compute_cramers_v` | Cramér's V association strength between two categorical columns (0 = none, 1 = perfect). |
+| `get_descriptive_stats` | Mean, median, std, skewness, kurtosis, min, max, p25, p75 for a list of numeric columns. |
+| `compute_categorical_stats` | Unique count, top value, top frequency, and top-20 value counts for categorical columns; also flags likely identifiers (>80% unique values). |
+| `compute_group_aggregates` | Group size and mean of a numeric metric broken down by a categorical column. |
+| `analyze_datetime_column` | Trend direction (`upward` / `downward` / `flat`) of a numeric metric over a datetime column, plus start/end time and gap/outlier flags. |
 
 Output — `StatsProfile`: `numeric_stats` (mean, median, std, skewness, kurtosis, min, max, p25, p75 per numerical column), `categorical_stats` (unique count, top value, frequency, value counts per categorical column), `group_comparisons`, `time_trends`, `key_findings`.
 
