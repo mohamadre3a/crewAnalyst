@@ -10,109 +10,129 @@ This project is designed by me, and is developed by me and help of Codex and Cla
 
 ## How It Works
 
-The pipeline runs sequentially. Each agent receives the outputs of all prior agents before it acts.
+The pipeline has one sequential gate, then a parallel middle, then three sequential finishing steps.
+
+```
+CSV file
+   │
+   ▼
+[1] Profile              (sequential — all other steps depend on this)
+   │
+   ├──────────────────────────────────────────┐
+   ▼                     ▼                   ▼
+[2] Statistician    [3] Anomaly         [4] Correlation    ← run in parallel
+   │                     │                   │
+   └──────────────────────────────────────────┘
+                          │
+                          ▼
+                    [5] Visualizer        (waits for 2, 3, 4)
+                          │
+                          ▼
+                    [6] Synthesizer       (waits for 1–5)
+                          │
+                          ▼
+                    [7] Reporter          (waits for 1–6)
+```
 
 ---
 
-**Step 1 — Read the dataset**
+**Step 1 — Profile** · `profiler_agent` · *claude-haiku*
 
-The CSV file path (and an optional free-text context string) is passed into the crew. No agent runs until the file path is validated.
-
----
-
-**Step 2 — Profile** · `profiler_agent` · *claude-haiku*
-
-Understands the shape, quality, and meaning of the dataset so every downstream agent has a reliable foundation.
+First step, always sequential. Classifies every column and produces the `DataProfile` that all other agents receive.
 
 | Tool | What it does |
 |---|---|
-| `inspect_csv` | Loads the CSV and returns row count, column count, data types, and a 10-row sample (first 5 + last 5). |
+| `inspect_csv` | Loads the CSV; returns row count, column count, dtypes, and a 10-row sample (first 5 + last 5). |
 | `get_null_report` | Returns null count and null percentage for every column. |
 
-Output: a structured `DataProfile` — column semantic roles (identifier, target, feature, datetime, text), inferred domain, and quality flags.
+Output — `DataProfile`: per-column `semantic_role` (`identifier`, `categorical`, `numerical`, `datetime`, `target_metric`, `text`), `inferred_domain`, `quality_flags`, `has_datetime_index`, `has_target_metric`.
 
 ---
 
-**Step 3 — Statistician** · `statistician_agent` · *claude-sonnet*
+**Steps 2, 3, 4 — run in parallel** (each receives only the `DataProfile` as context)
 
-Identifies important relationships, trends, and group differences across the dataset.
+---
+
+**Step 2 — Statistician** · `statistician_agent` · *claude-sonnet*
+
+Computes descriptive statistics, group comparisons, time trends, and surfaces 3–5 plain-English key findings.
 
 | Tool | What it does |
 |---|---|
-| `detect_outliers_iqr` | Flags values below Q1 − 1.5×IQR or above Q3 + 1.5×IQR in a numeric column. |
+| `detect_outliers_iqr` | Flags values outside Q1 − 1.5×IQR / Q3 + 1.5×IQR for a numeric column. |
 | `detect_outliers_zscore` | Flags values whose absolute Z-score exceeds a threshold (default 3.0). |
-| `detect_rare_categories` | Flags categorical values that appear in fewer than 1% of rows. |
-| `run_ttest` | Runs an independent-samples t-test between two groups on a numeric metric; returns t-stat, p-value, and significance flag. |
-| `compute_cramers_v` | Computes Cramér's V association strength between two categorical columns (0 = no association, 1 = perfect). |
+| `detect_rare_categories` | Flags categorical values appearing in fewer than 1% of rows. |
+| `run_ttest` | Independent-samples t-test between two groups; returns t-stat, p-value, and significance at p < 0.05. |
+| `compute_cramers_v` | Cramér's V association strength between two categorical columns (0 = none, 1 = perfect). |
 
-Output: descriptive statistics, group comparisons, and a structured list of actionable insights.
-
----
-
-**Step 4 — Anomaly Detection** · `anomaly_agent` · *claude-haiku*
-
-Cross-references two outlier methods to reduce false positives and interprets anomalies in the context of the dataset domain.
-
-| Tool | What it does |
-|---|---|
-| `detect_outliers_iqr` | IQR-based outlier detection (same tool as Step 3, re-run per column). |
-| `detect_outliers_zscore` | Z-score-based outlier detection (used alongside IQR — agreement between both elevates severity). |
-| `detect_rare_categories` | Rare-category scan for categorical columns to catch typos and data-entry errors. |
-
-Output: a list of flagged anomalies with severity levels, limited to numerical and categorical columns (never identifiers or free text).
+Output — `StatsProfile`: `numeric_stats` (mean, median, std, skewness, kurtosis, min, max, p25, p75 per numerical column), `categorical_stats` (unique count, top value, frequency, value counts per categorical column), `group_comparisons`, `time_trends`, `key_findings`.
 
 ---
 
-**Step 5 — Correlation** · `correlation_agent` · *claude-haiku*
+**Step 3 — Anomaly Detection** · `anomaly_agent` · *claude-haiku*
 
-Finds the strongest and most meaningful relationships between variables, with plain-English explanations for every finding.
+Cross-references IQR and Z-score results — anomalies flagged by both are elevated in severity. Interprets every finding in the context of the inferred domain.
 
 | Tool | What it does |
 |---|---|
-| `get_pearson_correlation_matrix` | Computes the full Pearson correlation matrix for all numeric columns. |
-| `compute_cramers_v` | Computes Cramér's V for categorical-to-categorical pairs where Pearson does not apply. |
-| `get_descriptive_stats` | Computes mean, median, std, min, max, skewness, and kurtosis for specified numeric columns. |
+| `detect_outliers_iqr` | IQR outlier scan per numerical column. |
+| `detect_outliers_zscore` | Z-score outlier scan per numerical column. |
+| `detect_rare_categories` | Rare-value scan per categorical column (catches typos and entry errors). |
 
-Output: ranked correlations with coefficient, method, direction, strength label, and a plain-English sentence per pair. Near-perfect correlations (V > 0.95) are flagged as potentially redundant features.
+Output — `AnomalyReport`: up to 20 `Anomaly` objects sorted by severity descending, each with `column`, `row_index`, `value`, `detection_method` (`iqr` / `zscore` / `both` / `rare_category`), `severity` (`high` / `medium` / `low`), `is_data_quality_issue`, and a one-sentence `interpretation`. Also reports `total_found`, `omitted_anomaly_count`, severity counts, `columns_with_no_anomalies`, and a `summary` paragraph.
 
 ---
 
-**Step 6 — Visualization** · `visualizer_agent` · *claude-sonnet*
+**Step 4 — Correlation** · `correlation_agent` · *claude-haiku*
 
-Generates charts directly informed by the profiler output and the statistician's findings.
+Finds the strongest relationships between variables. Focuses on the target metric column when one exists. Never computes correlations on identifier columns.
 
 | Tool | What it does |
 |---|---|
-| `generate_histogram` | Histogram with a KDE curve for a numeric column — shows distribution shape and skewness. |
-| `generate_boxplot` | Grouped box plot of a numeric metric across categories — shows spread and outliers per group. |
-| `generate_time_series_chart` | Line chart of a numeric metric over time; can split into multiple lines by a categorical column. |
-| `generate_correlation_heatmap` | Pearson correlation heatmap for all numeric columns together. |
+| `get_pearson_correlation_matrix` | Full Pearson correlation matrix for all numeric columns. |
+| `compute_cramers_v` | Cramér's V for categorical-to-categorical pairs. |
+| `get_descriptive_stats` | Mean, median, std, skewness, kurtosis, min, max, p25, p75 for specified numeric columns. |
+
+Output — `CorrelationReport`: `top_correlations` sorted by absolute coefficient, `target_metric_correlations` (if a target exists), `redundant_pairs` (|r| > 0.95), `total_pairs_tested`, and a `summary` paragraph. Each correlation includes coefficient, method, direction, strength label, and a plain-English sentence.
+
+---
+
+**Step 5 — Visualizer** · `visualizer_agent` · *claude-sonnet*
+
+Receives outputs from steps 1–4. Generates only charts that illustrate a specific finding — maximum 10 charts total.
+
+| Tool | What it does |
+|---|---|
+| `generate_histogram` | Histogram + KDE curve for a numeric column; used for skewed or interesting distributions. |
+| `generate_boxplot` | Grouped box plot of a numeric metric across categories; used when group differences are meaningful. |
+| `generate_time_series_chart` | Line chart over time; optionally splits by a categorical column. Only used when a datetime column exists. |
+| `generate_correlation_heatmap` | Pearson correlation heatmap for all numeric columns; used when multiple correlations are worth showing together. |
 | `generate_bar_chart` | Horizontal bar chart of the top N most frequent values in a categorical column. |
-| `generate_scatter_plot` | Scatter plot of two numeric columns; optionally colors points by a categorical grouping. |
-| `generate_anomaly_highlight_chart` | Index scatter plot with anomalous rows highlighted in red. |
+| `generate_scatter_plot` | Scatter plot of two numeric columns; optionally colors points by a category. Used for strong correlations (|r| > 0.5). |
+| `generate_anomaly_highlight_chart` | Index scatter plot with anomalous rows highlighted in red. Used for high-severity anomalies. |
 
-Output: PNG files saved to `outputs/charts/`.
-
----
-
-**Step 7 — Synthesize** · `synthesizer_agent` · *claude-sonnet*
-
-Distills all prior analysis into the 3–5 findings a business stakeholder actually needs to act on. No tools — works entirely from the structured outputs passed in by the prior agents.
-
-Output: executive summary, key findings in plain language, limitations, and recommended next steps.
+Output — `VizManifest`: list of `Chart` objects (title, caption, chart_type, finding_source, finding_it_illustrates, columns_used, file_path) and `skipped_visualizations` noting what was considered but not charted. PNG files saved to `outputs/charts/`.
 
 ---
 
-**Step 8 — Report** · `reporter_agent` · *claude-haiku*
+**Step 6 — Synthesizer** · `synthesizer_agent` · *claude-sonnet*
 
-Composes the full report as markdown, saves it to disk, and converts it to a styled PDF.
+Receives all prior outputs. No tools — works entirely from structured context.
+
+Output — `ExecutiveSynthesis`: `key_findings` ranked list (each tagged `actionable: true/false`), 2–3 paragraph `executive_summary` in plain English for a non-technical audience, `what_data_cannot_answer`, `recommended_next_steps` (3 concrete actions grounded in the findings), `overall_data_quality_assessment` (`good` / `acceptable` / `poor`), and a `quality_caveat` if quality is not good.
+
+---
+
+**Step 7 — Reporter** · `reporter_agent` · *claude-haiku*
+
+Receives all prior outputs and composes the full report. The markdown is saved automatically to `outputs/report.md` by CrewAI (`output_file`). The agent can then convert it to PDF.
 
 | Tool | What it does |
 |---|---|
-| `write_markdown_report` | Writes the complete markdown string to `outputs/report.md`. Chart references use relative paths so images render correctly. |
+| `write_markdown_report` | Writes the complete markdown string to `outputs/report.md` with chart references as relative paths. |
 | `convert_markdown_to_pdf` | Converts the saved markdown to a styled A4 PDF at `outputs/report.pdf` using WeasyPrint; charts embed inline. |
 
-Output: `outputs/report.md` and `outputs/report.pdf`.
+Report sections: Executive Summary · Key Findings · Dataset Overview · Statistical Highlights · Anomalies · Relationships · Visualizations (one subsection per chart) · What This Data Cannot Answer · Recommended Next Steps · Data Quality Assessment.
 
 ---
 
